@@ -1,0 +1,20 @@
+.env
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Models (large files)
+models/*
+!models/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
