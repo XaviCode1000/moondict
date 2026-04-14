@@ -47,6 +47,9 @@ def mock_all_external_deps() -> dict[str, MagicMock]:
         patch("moondict.tray.indicator.Image") as mock_image,
         patch("moondict.injection.xdotool.subprocess.run") as mock_subprocess_run,
     ):
+        # Setup mock get_model_for_language — returns (path, arch) tuple
+        mock_get_model.return_value = ("/fake/model/path", mock_model)
+
         # Setup mock transcriber
         mock_transcriber_instance = MagicMock()
         mock_transcriber.return_value = mock_transcriber_instance

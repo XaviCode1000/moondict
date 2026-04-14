@@ -81,13 +81,15 @@ class MoonshineEngine(TranscriberEngine):
         logger.info("Loading Moonshine model for language: {}", self._config.language)
 
         try:
-            self._model = get_model_for_language(self._config.language)
+            model_path, model_arch = get_model_for_language(self._config.language)
+            self._model_path = model_path
+            self._model_arch = model_arch
         except Exception as exc:
             logger.error("Failed to load model: {}", exc)
             raise EngineLoadError(f"Model load failed: {exc}") from exc
 
         try:
-            self._transcriber = Transcriber(self._model)
+            self._transcriber = Transcriber(self._model_path, self._model_arch)
         except Exception as exc:
             logger.error("Failed to initialize transcriber: {}", exc)
             raise EngineLoadError(f"Transcriber init failed: {exc}") from exc

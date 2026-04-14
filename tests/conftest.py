@@ -26,9 +26,12 @@ def mock_transcriber() -> MagicMock:
 
 @pytest.fixture
 def mock_get_model_for_language() -> MagicMock:
-    """Mock get_model_for_language from moonshine_voice."""
+    """Mock get_model_for_language from moonshine_voice.
+
+    Returns a tuple of (model_path_str, model_arch_mock) matching the real API.
+    """
     with patch("moondict.engine.moonshine.get_model_for_language") as mock:
-        mock.return_value = MagicMock()
+        mock.return_value = ("/fake/model/path", MagicMock())
         yield mock
 
 
