@@ -1,0 +1,20 @@
+[+] Loading PulseAudio module
+536870916
+[+] Waiting for device R58W30HJ23K
+[+] Checking permissions
+android.permission.POST_NOTIFICATIONS: granted=true
+android.permission.RECORD_AUDIO: granted=true
+[+] Starting Audio Source
+Starting: Intent { act=android.intent.action.MAIN cat=[android.intent.category.LAUNCHER] cmp=fr.dzx.audiosource/.MainActivity }
+[+] Forwarding audio to android-c8ab597
+Traceback (most recent call last):
+  File "<string>", line 39, in <module>
+    main(sys.argv[1], sys.argv[2])
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 36, in main
+    socat(sock, fifo)
+    ~~~~~^^^^^^^^^^^^
+  File "<string>", line 27, in socat
+    os.write(out.fileno(), buf)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe

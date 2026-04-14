@@ -14,10 +14,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 # Map config key strings to pynput Key enum values
-_KEY_MAP: dict[str, Key] = {
-    "ctrl": Key.ctrl,
-    "alt": Key.alt,
-    "shift": Key.shift,
+# Each key maps to a tuple of all matching variants (left, right, generic)
+_KEY_MAP: dict[str, tuple[Key, ...]] = {
+    "ctrl": (Key.ctrl, Key.ctrl_l, Key.ctrl_r),
+    "alt": (Key.alt, Key.alt_l, Key.alt_r),
+    "shift": (Key.shift, Key.shift_l, Key.shift_r),
 }
 
 # Double-tap window in seconds
@@ -49,7 +50,7 @@ class KeyboardListener:
             on_press: Callback invoked when dictation should start.
             on_release: Callback invoked when dictation should stop.
         """
-        self._pynput_key = _KEY_MAP[key]
+        self._pynput_keys = _KEY_MAP[key]
         self._mode = mode
         self._on_press = on_press
         self._on_release = on_release
@@ -65,7 +66,7 @@ class KeyboardListener:
         )
         self._listener.start()
         logger.info(
-            "Keyboard listener started (key={}, mode={})", self._mode, self._pynput_key
+            "Keyboard listener started (key={}, mode={})", self._mode, self._pynput_keys
         )
 
     def stop(self) -> None:
@@ -85,7 +86,7 @@ class KeyboardListener:
             key: The pynput Key that was pressed.
             *_args: Additional pynput event data (unused).
         """
-        if key != self._pynput_key:
+        if key not in self._pynput_keys:
             return
 
         if self._mode == "push_to_talk":
@@ -102,7 +103,7 @@ class KeyboardListener:
             key: The pynput Key that was released.
             *_args: Additional pynput event data (unused).
         """
-        if key != self._pynput_key:
+        if key not in self._pynput_keys:
             return
 
         if self._mode == "push_to_talk":
