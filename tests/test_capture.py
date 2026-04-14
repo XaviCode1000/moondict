@@ -154,81 +154,128 @@ class TestAudioCaptureListDevices:
 class TestFindAndroidMic:
     """Tests for find_android_mic() auto-detection."""
 
-    def test_find_android_mic_returns_index_when_found(self) -> None:
-        """Should return the index of the first device matching 'android-'."""
-        with patch("moondict.audio.capture.sd") as mock_sd:
-            mock_sd.query_devices.return_value = [
-                {"name": "Built-in Mic", "max_input_channels": 1},
-                {"name": "android-R58W30HJ23K.monitor", "max_input_channels": 2},
-                {"name": "USB Headset", "max_input_channels": 1},
-            ]
+    def test_find_android_mic_returns_source_name_when_found(self) -> None:
+        """Should return the source name matching 'android-'."""
+        with patch("moondict.audio.capture.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="56\talsa_input.pci.monitor\tPipeWire\ts32le 2ch 48000Hz\tSUSPENDED\n2276\tandroid-c8ab597\tPipeWire\ts16le 1ch 44100Hz\tSUSPENDED\n"
+            )
 
             result = find_android_mic()
 
-            assert result == 1
+            assert result == "android-c8ab597"
 
     def test_find_android_mic_returns_first_match(self) -> None:
-        """Should return the index of the first matching android device."""
-        with patch("moondict.audio.capture.sd") as mock_sd:
-            mock_sd.query_devices.return_value = [
-                {"name": "android-ABC.monitor", "max_input_channels": 1},
-                {"name": "android-XYZ.monitor", "max_input_channels": 1},
-            ]
+        """Should return the first android source name found."""
+        with patch("moondict.audio.capture.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="10\tandroid-ABC\tPipeWire\ts16le 1ch 44100Hz\tSUSPENDED\n20\tandroid-XYZ\tPipeWire\ts16le 1ch 44100Hz\tSUSPENDED\n"
+            )
 
             result = find_android_mic()
 
-            assert result == 0
+            assert result == "android-ABC"
 
     def test_find_android_mic_returns_none_when_not_found(self) -> None:
-        """Should return None when no android device exists."""
-        with patch("moondict.audio.capture.sd") as mock_sd:
-            mock_sd.query_devices.return_value = [
-                {"name": "Built-in Mic", "max_input_channels": 1},
-                {"name": "USB Microphone", "max_input_channels": 2},
-            ]
+        """Should return None when no android source exists."""
+        with patch("moondict.audio.capture.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                stdout="56\talsa_input.pci.monitor\tPipeWire\ts32le 2ch 48000Hz\tSUSPENDED\n"
+            )
 
             result = find_android_mic()
 
             assert result is None
 
     def test_find_android_mic_returns_none_when_empty(self) -> None:
-        """Should return None when no devices are available."""
-        with patch("moondict.audio.capture.sd") as mock_sd:
-            mock_sd.query_devices.return_value = []
+        """Should return None when no sources are available."""
+        with patch("moondict.audio.capture.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(stdout="")
+
+            result = find_android_mic()
+
+            assert result is None
+
+    def test_find_android_mic_returns_none_on_error(self) -> None:
+        """Should return None when pactl fails."""
+        with patch("moondict.audio.capture.subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError("pactl not found")
 
             result = find_android_mic()
 
             assert result is None
 
 
+class TestAndroidMicManager:
+    """Tests for AndroidMicManager PipeWire source switching."""
+
+    @patch("moondict.audio.capture.subprocess.run")
+    def test_activate_saves_original_and_switches(self, mock_run: MagicMock) -> None:
+        """Should save original default and switch to android source."""
+        from moondict.audio.capture import AndroidMicManager
+
+        mock_run.return_value = MagicMock(
+            stdout="alsa_input.pci-0000_00_1b.0.analog-stereo\n"
+        )
+        mgr = AndroidMicManager("android-c8ab597")
+        mgr.activate()
+
+        # Should have called get-default-source once and set-default-source once
+        assert mock_run.call_count == 2
+
+    @patch("moondict.audio.capture.subprocess.run")
+    def test_restore_switches_back(self, mock_run: MagicMock) -> None:
+        """Should restore the original default source."""
+        from moondict.audio.capture import AndroidMicManager
+
+        mock_run.return_value = MagicMock(
+            stdout="alsa_input.pci-0000_00_1b.0.analog-stereo\n"
+        )
+        mgr = AndroidMicManager("android-c8ab597")
+        mgr.activate()
+        mgr.restore()
+
+        # Should have called set-default-source for restore
+        assert mock_run.call_count == 3
+
+    @patch("moondict.audio.capture.subprocess.run")
+    def test_restore_is_safe_without_activate(self, mock_run: MagicMock) -> None:
+        """Should not raise when restore called without activate."""
+        from moondict.audio.capture import AndroidMicManager
+
+        mgr = AndroidMicManager("android-c8ab597")
+        mgr.restore()  # Should not raise
+
+        mock_run.assert_not_called()
+
+
 class TestAudioCaptureAutoDetect:
     """Tests for AudioCapture auto_detect_android parameter."""
 
-    def test_auto_detect_uses_find_android_mic_when_device_none(
+    def test_auto_detect_activates_android_mic_when_device_none(
         self,
         sample_config: MoonDictConfig,
     ) -> None:
-        """Should call find_android_mic() when audio_device is None and auto_detect is True."""
+        """Should activate AndroidMicManager when audio_device is None and auto_detect is True."""
         config = MoonDictConfig(audio_device=None)
 
         with (
             patch("moondict.audio.capture.sd") as mock_sd,
             patch("moondict.audio.capture.find_android_mic") as mock_find,
+            patch("moondict.audio.capture.AndroidMicManager") as mock_mgr_cls,
         ):
             mock_stream = MagicMock()
             mock_sd.InputStream.return_value = mock_stream
-            mock_sd.query_devices.return_value = [
-                {"name": "android-mic", "max_input_channels": 1}
-            ] * 50
-            mock_find.return_value = 42
+            mock_find.return_value = "android-c8ab597"
+            mock_mgr = MagicMock()
+            mock_mgr_cls.return_value = mock_mgr
 
             capture = AudioCapture(config, auto_detect_android=True)
             capture.start()
 
             mock_find.assert_called_once()
-            # Verify the found device was used
-            call_kwargs = mock_sd.InputStream.call_args
-            assert call_kwargs.kwargs["device"] == 42
+            mock_mgr_cls.assert_called_once_with("android-c8ab597")
+            mock_mgr.activate.assert_called_once()
 
     def test_auto_detect_skips_when_device_set(
         self,
@@ -240,6 +287,7 @@ class TestAudioCaptureAutoDetect:
         with (
             patch("moondict.audio.capture.sd") as mock_sd,
             patch("moondict.audio.capture.find_android_mic") as mock_find,
+            patch("moondict.audio.capture.AndroidMicManager") as mock_mgr_cls,
         ):
             mock_stream = MagicMock()
             mock_sd.InputStream.return_value = mock_stream
@@ -251,8 +299,7 @@ class TestAudioCaptureAutoDetect:
             capture.start()
 
             mock_find.assert_not_called()
-            call_kwargs = mock_sd.InputStream.call_args
-            assert call_kwargs.kwargs["device"] == 0
+            mock_mgr_cls.assert_not_called()
 
     def test_auto_detect_false_does_not_autodetect(
         self,
@@ -264,6 +311,7 @@ class TestAudioCaptureAutoDetect:
         with (
             patch("moondict.audio.capture.sd") as mock_sd,
             patch("moondict.audio.capture.find_android_mic") as mock_find,
+            patch("moondict.audio.capture.AndroidMicManager") as mock_mgr_cls,
         ):
             mock_stream = MagicMock()
             mock_sd.InputStream.return_value = mock_stream
@@ -272,24 +320,52 @@ class TestAudioCaptureAutoDetect:
             capture.start()
 
             mock_find.assert_not_called()
+            mock_mgr_cls.assert_not_called()
 
-    def test_auto_detect_uses_none_when_no_android_found(
+    def test_auto_detect_restores_on_stop(
         self,
         sample_config: MoonDictConfig,
     ) -> None:
-        """Should pass device=None to stream when find_android_mic returns None."""
+        """Should restore original default source when stopping."""
         config = MoonDictConfig(audio_device=None)
 
         with (
             patch("moondict.audio.capture.sd") as mock_sd,
             patch("moondict.audio.capture.find_android_mic") as mock_find,
+            patch("moondict.audio.capture.AndroidMicManager") as mock_mgr_cls,
         ):
             mock_stream = MagicMock()
             mock_sd.InputStream.return_value = mock_stream
-            mock_find.return_value = None
+            mock_find.return_value = "android-c8ab597"
+            mock_mgr = MagicMock()
+            mock_mgr_cls.return_value = mock_mgr
 
             capture = AudioCapture(config, auto_detect_android=True)
             capture.start()
+            capture.stop()
 
-            call_kwargs = mock_sd.InputStream.call_args
-            assert call_kwargs.kwargs["device"] is None
+            mock_mgr.restore.assert_called_once()
+
+    def test_auto_detect_restores_on_stream_error(
+        self,
+        sample_config: MoonDictConfig,
+    ) -> None:
+        """Should restore original default source when stream fails to open."""
+        config = MoonDictConfig(audio_device=None)
+
+        with (
+            patch("moondict.audio.capture.sd") as mock_sd,
+            patch("moondict.audio.capture.find_android_mic") as mock_find,
+            patch("moondict.audio.capture.AndroidMicManager") as mock_mgr_cls,
+        ):
+            mock_sd.InputStream.side_effect = PortAudioError("Permission denied")
+            mock_find.return_value = "android-c8ab597"
+            mock_mgr = MagicMock()
+            mock_mgr_cls.return_value = mock_mgr
+
+            capture = AudioCapture(config, auto_detect_android=True)
+
+            with pytest.raises(StreamOpenError):
+                capture.start()
+
+            mock_mgr.restore.assert_called_once()
