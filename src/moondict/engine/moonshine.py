@@ -25,21 +25,27 @@ if TYPE_CHECKING:
 class TranscriptEventListener:
     """Callback adapter that bridges Moonshine events to the engine queue.
 
-    Receives line-by-line transcription results from the Moonshine transcriber
-    and puts them into a thread-safe queue for the application to consume.
+    Receives TranscriptEvent callbacks from the Moonshine transcriber
+    and puts the transcribed text into a thread-safe queue for the application.
+    Implements __call__ to be used as a callable listener.
     """
 
     def __init__(self, engine: MoonshineEngine) -> None:
         self._engine = engine
 
-    def on_line_completed(self, text: str) -> None:
-        """Put transcribed text into the engine's queue.
+    def __call__(self, event: object) -> None:
+        """Handle a transcription event from the Moonshine transcriber.
 
         Args:
-            text: The transcribed text line.
+            event: TranscriptEvent with line, stream_handle fields.
         """
-        logger.debug("Transcription received: {}", text)
-        self._engine._queue.put(text)
+        # TranscriptEvent has .line.text, .line.is_complete, etc.
+        text = getattr(getattr(event, "line", None), "text", "")
+        if text:
+            is_complete = getattr(getattr(event, "line", None), "is_complete", False)
+            logger.debug("Transcription event: '{}' (complete={})", text, is_complete)
+            if is_complete:
+                self._engine._queue.put(text)
 
 
 class MoonshineEngine(TranscriberEngine):
@@ -117,6 +123,11 @@ class MoonshineEngine(TranscriberEngine):
         self._listener = listener
         callback_handler = TranscriptEventListener(self)
 
+        # Attach listener to transcriber and start streaming BEFORE opening audio stream
+        if self._transcriber:
+            self._transcriber.add_listener(callback_handler)
+            self._transcriber.start()
+
         try:
             self._stream = sd.InputStream(
                 samplerate=self._config.sample_rate,
@@ -130,10 +141,6 @@ class MoonshineEngine(TranscriberEngine):
             logger.error("Failed to start audio stream: {}", exc)
             raise EngineStartError(f"Stream open failed: {exc}") from exc
 
-        # Attach listener to transcriber
-        if self._transcriber:
-            self._transcriber.add_listener(callback_handler)
-
         self._running_event.set()
         logger.info("Audio capture started")
 
@@ -142,6 +149,12 @@ class MoonshineEngine(TranscriberEngine):
         if not self._running_event.is_set():
             logger.debug("Engine not running, nothing to stop")
             return
+
+        if self._transcriber:
+            try:
+                self._transcriber.stop()
+            except Exception as exc:
+                logger.warning("Error stopping transcriber: {}", exc)
 
         if self._stream:
             try:
@@ -184,6 +197,7 @@ class MoonshineEngine(TranscriberEngine):
 
         if self._transcriber is not None:
             try:
-                self._transcriber.process(indata)
+                audio_list = indata.flatten().tolist()
+                self._transcriber.add_audio(audio_list, sample_rate=16000)
             except Exception as exc:
                 logger.error("Transcription error: {}", exc)

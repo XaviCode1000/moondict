@@ -9,7 +9,10 @@
       "Bash(ruff *)",
       "Bash(git checkout *)",
       "Bash(sed *)",
-      "Bash(mypy *)"
+      "Bash(mypy *)",
+      "mcp__gitnexus__context",
+      "mcp__gitnexus__query",
+      "Bash(pytest *)"
     ]
   },
   "$version": 3

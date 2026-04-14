@@ -177,20 +177,44 @@ class TestMoonshineEngineStateTransitions:
 class TestTranscriptEventListener:
     """Tests for TranscriptEventListener inner class."""
 
-    def test_on_line_completed_puts_text_in_queue(
+    def test_on_transcript_event_puts_text_in_queue(
         self,
         sample_config: MoonDictConfig,
     ) -> None:
-        """Listener puts received text into the engine's queue."""
+        """Listener puts completed text into the engine's queue."""
         engine = MoonshineEngine(sample_config)
         listener = TranscriptEventListener(engine)
 
-        listener.on_line_completed("hello world")
+        mock_line = MagicMock()
+        mock_line.text = "hello world"
+        mock_line.is_complete = True
+        mock_event = MagicMock()
+        mock_event.line = mock_line
+
+        listener(mock_event)
 
         text = engine._queue.get_nowait()
         assert text == "hello world"
 
-    def test_on_line_completed_thread_safe(
+    def test_on_transcript_event_ignores_incomplete(
+        self,
+        sample_config: MoonDictConfig,
+    ) -> None:
+        """Listener does NOT put incomplete text into queue."""
+        engine = MoonshineEngine(sample_config)
+        listener = TranscriptEventListener(engine)
+
+        mock_line = MagicMock()
+        mock_line.text = "partial"
+        mock_line.is_complete = False
+        mock_event = MagicMock()
+        mock_event.line = mock_line
+
+        listener(mock_event)
+
+        assert engine._queue.empty()
+
+    def test_on_transcript_event_thread_safe(
         self,
         sample_config: MoonDictConfig,
     ) -> None:
@@ -199,6 +223,11 @@ class TestTranscriptEventListener:
         listener = TranscriptEventListener(engine)
 
         for i in range(100):
-            listener.on_line_completed(f"text-{i}")
+            mock_line = MagicMock()
+            mock_line.text = f"text-{i}"
+            mock_line.is_complete = True
+            mock_event = MagicMock()
+            mock_event.line = mock_line
+            listener(mock_event)
 
         assert engine._queue.qsize() == 100
