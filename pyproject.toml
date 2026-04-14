@@ -83,6 +83,8 @@ ignore = [
     "E501",  # line too long (handled by formatter)
     "E741",  # ambiguous variable name
     "N818",  # exception naming
+    "TC001",  # move application import into type-checking block (false positive for runtime params)
+    "TC002",  # move third-party import into type-checking block (false positive for runtime numpy/sd)
 ]
 
 [tool.ruff.lint.isort]
@@ -95,6 +97,10 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["sounddevice", "moonshine_voice", "simpleaudio", "pynput", "pystray"]
+ignore_missing_imports = true
 
 # ── Pytest ──────────────────────────────────────────────────────
 [tool.pytest.ini_options]
