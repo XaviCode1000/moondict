@@ -177,12 +177,13 @@ class TestMoonshineEngineStateTransitions:
 class TestTranscriptEventListener:
     """Tests for TranscriptEventListener inner class."""
 
-    def test_on_transcript_event_puts_text_in_queue(
+    def test_on_transcript_event_forwards_to_listener(
         self,
         sample_config: MoonDictConfig,
     ) -> None:
-        """Listener puts completed text into the engine's queue."""
+        """Listener forwards completed text to engine._listener."""
         engine = MoonshineEngine(sample_config)
+        engine._listener = MagicMock()  # Simulate app's event bridge
         listener = TranscriptEventListener(engine)
 
         mock_line = MagicMock()
@@ -193,15 +194,15 @@ class TestTranscriptEventListener:
 
         listener(mock_event)
 
-        text = engine._queue.get_nowait()
-        assert text == "hello world"
+        engine._listener.on_line_completed.assert_called_once_with("hello world")
 
     def test_on_transcript_event_ignores_incomplete(
         self,
         sample_config: MoonDictConfig,
     ) -> None:
-        """Listener does NOT put incomplete text into queue."""
+        """Listener does NOT forward incomplete text."""
         engine = MoonshineEngine(sample_config)
+        engine._listener = MagicMock()
         listener = TranscriptEventListener(engine)
 
         mock_line = MagicMock()
@@ -212,22 +213,21 @@ class TestTranscriptEventListener:
 
         listener(mock_event)
 
-        assert engine._queue.empty()
+        engine._listener.on_line_completed.assert_not_called()
 
-    def test_on_transcript_event_thread_safe(
+    def test_on_transcript_event_ignores_when_no_listener(
         self,
         sample_config: MoonDictConfig,
     ) -> None:
-        """Multiple concurrent puts don't corrupt the queue."""
+        """Listener does nothing when engine._listener is None."""
         engine = MoonshineEngine(sample_config)
         listener = TranscriptEventListener(engine)
 
-        for i in range(100):
-            mock_line = MagicMock()
-            mock_line.text = f"text-{i}"
-            mock_line.is_complete = True
-            mock_event = MagicMock()
-            mock_event.line = mock_line
-            listener(mock_event)
+        mock_line = MagicMock()
+        mock_line.text = "hello"
+        mock_line.is_complete = True
+        mock_event = MagicMock()
+        mock_event.line = mock_line
 
-        assert engine._queue.qsize() == 100
+        # Should not raise
+        listener(mock_event)

@@ -107,12 +107,13 @@ class TestMoonDictAppLifecycle:
         mocked_app["play_sound"].assert_called_once_with("start", enabled=True)
 
     def test_on_listening_stop_transitions_to_processing(self, mocked_app):
-        """_on_listening_stop should stop engine and transition to PROCESSING."""
+        """_on_listening_stop should transition to PROCESSING (engine keeps running)."""
         app = MoonDictApp(mocked_app["config"])
         app._on_listening_start()
         app._on_listening_stop()
 
-        mocked_app["engine"].stop.assert_called_once()
+        # Engine should NOT be stopped — it needs to finish processing buffered audio
+        mocked_app["engine"].stop.assert_not_called()
         assert app.state.current_state == DictationState.PROCESSING
 
     def test_full_dictation_cycle(self, mocked_app):

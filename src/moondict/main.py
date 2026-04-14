@@ -159,10 +159,12 @@ class MoonDictApp:
     def _on_listening_stop(self) -> None:
         """Callback: user triggered dictation stop (keyboard release / double-tap).
 
-        Stops the engine's audio capture and transitions to PROCESSING state.
+        Transitions to PROCESSING state. Engine keeps running to finish
+        processing any buffered audio that was captured during listening.
         """
         logger.info("Dictation stop triggered")
-        self._engine.stop()
+        # Don't stop the engine — let it finish processing buffered audio.
+        # The engine will be stopped on app shutdown via stop().
         self._state.transition_to(DictationState.PROCESSING)
 
         # Update tray state

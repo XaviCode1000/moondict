@@ -101,7 +101,7 @@ class TestFullDictationFlow:
         # Simulate user releasing key (stop listening, start processing)
         app._on_listening_stop()
         assert app.state.current_state == DictationState.PROCESSING
-        ctx["engine"].stop.assert_called_once()
+        # Engine keeps running to finish processing buffered audio
 
         # Simulate transcription result
         test_text = "Hola, esto es una prueba de dictado"
