@@ -114,6 +114,21 @@ class TestMainCliFlags:
 
         mock_app["config_cls"].assert_called_once()
 
+    def test_android_mic_flag(self, mock_app):
+        """--android-mic should set android_mic to True."""
+        with patch("sys.argv", ["moondict", "--android-mic"]):
+            main()
+
+        assert mock_app["config"].android_mic is True
+
+    def test_no_android_mic_flag_not_set(self, mock_app):
+        """Without --android-mic, android_mic should not be overridden."""
+        with patch("sys.argv", ["moondict"]):
+            main()
+
+        # Config created without android_mic override (uses config default)
+        mock_app["app_cls"].assert_called_once()
+
 
 class TestSignalHandler:
     """Tests for signal handler behavior."""

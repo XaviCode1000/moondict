@@ -9,7 +9,12 @@ import pytest
 import sounddevice as sd
 from sounddevice import PortAudioError
 
-from moondict.audio.capture import AudioCapture, DeviceNotFoundError, StreamOpenError
+from moondict.audio.capture import (
+    AudioCapture,
+    DeviceNotFoundError,
+    StreamOpenError,
+    find_android_mic,
+)
 from moondict.config import MoonDictConfig
 
 
@@ -144,3 +149,147 @@ class TestAudioCaptureListDevices:
             devices = AudioCapture.list_devices()
 
             assert devices == []
+
+
+class TestFindAndroidMic:
+    """Tests for find_android_mic() auto-detection."""
+
+    def test_find_android_mic_returns_index_when_found(self) -> None:
+        """Should return the index of the first device matching 'android-'."""
+        with patch("moondict.audio.capture.sd") as mock_sd:
+            mock_sd.query_devices.return_value = [
+                {"name": "Built-in Mic", "max_input_channels": 1},
+                {"name": "android-R58W30HJ23K.monitor", "max_input_channels": 2},
+                {"name": "USB Headset", "max_input_channels": 1},
+            ]
+
+            result = find_android_mic()
+
+            assert result == 1
+
+    def test_find_android_mic_returns_first_match(self) -> None:
+        """Should return the index of the first matching android device."""
+        with patch("moondict.audio.capture.sd") as mock_sd:
+            mock_sd.query_devices.return_value = [
+                {"name": "android-ABC.monitor", "max_input_channels": 1},
+                {"name": "android-XYZ.monitor", "max_input_channels": 1},
+            ]
+
+            result = find_android_mic()
+
+            assert result == 0
+
+    def test_find_android_mic_returns_none_when_not_found(self) -> None:
+        """Should return None when no android device exists."""
+        with patch("moondict.audio.capture.sd") as mock_sd:
+            mock_sd.query_devices.return_value = [
+                {"name": "Built-in Mic", "max_input_channels": 1},
+                {"name": "USB Microphone", "max_input_channels": 2},
+            ]
+
+            result = find_android_mic()
+
+            assert result is None
+
+    def test_find_android_mic_returns_none_when_empty(self) -> None:
+        """Should return None when no devices are available."""
+        with patch("moondict.audio.capture.sd") as mock_sd:
+            mock_sd.query_devices.return_value = []
+
+            result = find_android_mic()
+
+            assert result is None
+
+
+class TestAudioCaptureAutoDetect:
+    """Tests for AudioCapture auto_detect_android parameter."""
+
+    def test_auto_detect_uses_find_android_mic_when_device_none(
+        self,
+        sample_config: MoonDictConfig,
+    ) -> None:
+        """Should call find_android_mic() when audio_device is None and auto_detect is True."""
+        config = MoonDictConfig(audio_device=None)
+
+        with (
+            patch("moondict.audio.capture.sd") as mock_sd,
+            patch("moondict.audio.capture.find_android_mic") as mock_find,
+        ):
+            mock_stream = MagicMock()
+            mock_sd.InputStream.return_value = mock_stream
+            mock_sd.query_devices.return_value = [
+                {"name": "android-mic", "max_input_channels": 1}
+            ] * 50
+            mock_find.return_value = 42
+
+            capture = AudioCapture(config, auto_detect_android=True)
+            capture.start()
+
+            mock_find.assert_called_once()
+            # Verify the found device was used
+            call_kwargs = mock_sd.InputStream.call_args
+            assert call_kwargs.kwargs["device"] == 42
+
+    def test_auto_detect_skips_when_device_set(
+        self,
+        sample_config: MoonDictConfig,
+    ) -> None:
+        """Should NOT call find_android_mic() when audio_device is explicitly set."""
+        config = MoonDictConfig(audio_device=0)
+
+        with (
+            patch("moondict.audio.capture.sd") as mock_sd,
+            patch("moondict.audio.capture.find_android_mic") as mock_find,
+        ):
+            mock_stream = MagicMock()
+            mock_sd.InputStream.return_value = mock_stream
+            mock_sd.query_devices.return_value = [
+                {"name": "Default Mic", "max_input_channels": 1}
+            ]
+
+            capture = AudioCapture(config, auto_detect_android=True)
+            capture.start()
+
+            mock_find.assert_not_called()
+            call_kwargs = mock_sd.InputStream.call_args
+            assert call_kwargs.kwargs["device"] == 0
+
+    def test_auto_detect_false_does_not_autodetect(
+        self,
+        sample_config: MoonDictConfig,
+    ) -> None:
+        """Should NOT call find_android_mic() when auto_detect_android is False."""
+        config = MoonDictConfig(audio_device=None)
+
+        with (
+            patch("moondict.audio.capture.sd") as mock_sd,
+            patch("moondict.audio.capture.find_android_mic") as mock_find,
+        ):
+            mock_stream = MagicMock()
+            mock_sd.InputStream.return_value = mock_stream
+
+            capture = AudioCapture(config, auto_detect_android=False)
+            capture.start()
+
+            mock_find.assert_not_called()
+
+    def test_auto_detect_uses_none_when_no_android_found(
+        self,
+        sample_config: MoonDictConfig,
+    ) -> None:
+        """Should pass device=None to stream when find_android_mic returns None."""
+        config = MoonDictConfig(audio_device=None)
+
+        with (
+            patch("moondict.audio.capture.sd") as mock_sd,
+            patch("moondict.audio.capture.find_android_mic") as mock_find,
+        ):
+            mock_stream = MagicMock()
+            mock_sd.InputStream.return_value = mock_stream
+            mock_find.return_value = None
+
+            capture = AudioCapture(config, auto_detect_android=True)
+            capture.start()
+
+            call_kwargs = mock_sd.InputStream.call_args
+            assert call_kwargs.kwargs["device"] is None

@@ -24,6 +24,23 @@ class StreamOpenError(AudioCaptureError):
     """Raised when the audio stream cannot be opened."""
 
 
+def find_android_mic() -> int | None:
+    """Find the first PipeWire source matching 'android-' in its name.
+
+    Returns:
+        The device index, or None if no android source found.
+    """
+    devices = sd.query_devices()
+    for idx, dev in enumerate(devices):
+        name = dev.get("name", "")
+        if "android-" in name:
+            logger.debug("Found android mic at index {}: {}", idx, name)
+            return idx
+
+    logger.debug("No android mic found in audio devices")
+    return None
+
+
 class AudioCapture:
     """Manages raw audio input capture via sounddevice.
 
@@ -36,13 +53,21 @@ class AudioCapture:
     DTYPE = "float32"
     BLOCKSIZE = 1024
 
-    def __init__(self, config: MoonDictConfig) -> None:
+    def __init__(
+        self,
+        config: MoonDictConfig,
+        *,
+        auto_detect_android: bool = False,
+    ) -> None:
         """Initialize audio capture with configuration.
 
         Args:
             config: MoonDictConfig with audio device and sample rate settings.
+            auto_detect_android: When True and config.audio_device is None,
+                auto-detect an Android microphone via PipeWire.
         """
         self._config = config
+        self._auto_detect_android = auto_detect_android
         self._queue: queue.Queue[np.ndarray] = queue.Queue()
         self._stream: sd.InputStream | None = None
 
@@ -59,6 +84,12 @@ class AudioCapture:
             StreamOpenError: If the stream fails to open.
         """
         device = self._config.audio_device
+
+        # Auto-detect android mic if enabled and no device set
+        if self._auto_detect_android and device is None:
+            device = find_android_mic()
+            if device is not None:
+                logger.info("Auto-detected android mic at device {}", device)
 
         # Validate device exists if specified
         if device is not None:

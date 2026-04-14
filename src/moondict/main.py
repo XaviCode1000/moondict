@@ -41,7 +41,7 @@ class MoonDictApp:
 
         # Core components
         self._engine = MoonshineEngine(config)
-        self._capture = AudioCapture(config)
+        self._capture = AudioCapture(config, auto_detect_android=config.android_mic)
         self._state = StateMachine()
 
         # Event queue for engine → background thread communication

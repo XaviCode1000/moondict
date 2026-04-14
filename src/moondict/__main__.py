@@ -75,6 +75,12 @@ def _parse_args() -> argparse.Namespace:
         default=False,
         help="Disable system tray indicator",
     )
+    parser.add_argument(
+        "--android-mic",
+        action="store_true",
+        default=False,
+        help="Auto-detect Android microphone via PipeWire (audiosource)",
+    )
 
     return parser.parse_args()
 
@@ -101,6 +107,9 @@ def main() -> None:
 
     if args.model is not None:
         object.__setattr__(config, "model", args.model)
+
+    if args.android_mic:
+        object.__setattr__(config, "android_mic", True)
 
     use_tray = not args.no_tray
 

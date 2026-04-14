@@ -33,6 +33,7 @@ class MoonDictConfig(BaseSettings):
     audio_device: int | None = None
     sample_rate: int = 16000
     audio_feedback: bool = True
+    android_mic: bool = False
 
     # ── Text Injection ──────────────────────────────────────
     text_injection: TextInjectionBackend = "xdotool"
