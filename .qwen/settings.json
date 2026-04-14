@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__jina__read_url",
+      "Bash(engram *)",
+      "Bash(source *)",
+      "Bash(python *)",
+      "Bash(timeout *)",
+      "Bash(ruff *)",
+      "Bash(git checkout *)",
+      "Bash(sed *)",
+      "Bash(mypy *)"
+    ]
+  },
+  "$version": 3
+}

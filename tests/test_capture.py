@@ -64,7 +64,9 @@ class TestAudioCaptureLifecycle:
         capture = AudioCapture(config)
 
         with patch("moondict.audio.capture.sd") as mock_sd:
-            mock_sd.query_devices.return_value = [{"name": "Device 0", "max_input_channels": 1}]
+            mock_sd.query_devices.return_value = [
+                {"name": "Device 0", "max_input_channels": 1}
+            ]
 
             with pytest.raises(DeviceNotFoundError, match="9999"):
                 capture.start()

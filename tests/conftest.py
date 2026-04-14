@@ -81,8 +81,10 @@ def mock_pynput_mouse() -> MagicMock:
 @pytest.fixture
 def mock_pystray() -> MagicMock:
     """Mock pystray.Icon and MenuItem."""
-    with patch("moondict.tray.manager.Icon") as mock_icon, \
-         patch("moondict.tray.manager.MenuItem") as mock_item:
+    with (
+        patch("moondict.tray.manager.Icon") as mock_icon,
+        patch("moondict.tray.manager.MenuItem") as mock_item,
+    ):
         icon_instance = MagicMock()
         mock_icon.return_value = icon_instance
         yield mock_icon, mock_item
@@ -92,6 +94,7 @@ def mock_pystray() -> MagicMock:
 def sample_config():
     """Create a sample MoonDictConfig for tests."""
     from moondict.config import MoonDictConfig
+
     return MoonDictConfig(
         engine="moonshine",
         model="base_es",
